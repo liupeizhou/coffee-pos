@@ -273,8 +273,8 @@ export default function ReportsView() {
                   <div className="card-header">昨日</div>
                   <div className="card-value">{formatCurrency(comparisonData.yesterday.total)}</div>
                   <div className="card-orders">{comparisonData.yesterday.order_count} 单</div>
-                  <div className={`change ${comparisonData.changes.yoy >= 0 ? 'positive' : 'negative'}`}>
-                    同比: {formatPercent(comparisonData.changes.yoy)}
+                  <div className={`change ${comparisonData.changes.dod >= 0 ? 'positive' : 'negative'}`}>
+                    环比: {formatPercent(comparisonData.changes.dod)}
                   </div>
                 </div>
                 <div className="comparison-card">

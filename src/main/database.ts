@@ -20,6 +20,22 @@ function saveDatabase(): void {
   }
 }
 
+// 获取本地时区的当前日期（YYYY-MM-DD格式）
+function getLocalDate(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const localDate = new Date(now.getTime() - offset);
+  return localDate.toISOString().split('T')[0];
+}
+
+// 获取本地时区的当前时间（ISO格式，转换为本地时区）
+function getLocalTime(): string {
+  const now = new Date();
+  const offset = now.getTimezoneOffset() * 60000;
+  const localDate = new Date(now.getTime() - offset);
+  return localDate.toISOString().replace('Z', '');
+}
+
 export async function initDatabase(): Promise<void> {
   dbPath = getDbPath();
   log.info('Initializing database at:', dbPath);
@@ -432,20 +448,21 @@ export function getOrders(limit: number = 50): any[] {
 export function createOrder(order: any): any {
   // Generate order number
   const orderNumber = `ORD${Date.now()}`;
+  const now = getLocalTime();
 
   // Insert order
-  run(`INSERT INTO orders (order_number, subtotal, discount, total, payment_method, amount_paid, change, status, notes)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [orderNumber, order.subtotal, order.discount || 0, order.total, order.payment_method, order.amount_paid || 0, order.change || 0, 'completed', order.notes || null]);
+  run(`INSERT INTO orders (order_number, subtotal, discount, total, payment_method, amount_paid, change, status, notes, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [orderNumber, order.subtotal, order.discount || 0, order.total, order.payment_method, order.amount_paid || 0, order.change || 0, 'completed', order.notes || null, now]);
 
   const result = queryOne('SELECT last_insert_rowid() as id');
   const orderId = result?.id;
 
   // Insert order items
   order.items.forEach((item: any) => {
-    run(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, size, temperature, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, item.product_id, item.product_name, item.quantity, item.unit_price, item.size || null, item.temperature || null, item.notes || null]);
+    run(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, size, temperature, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orderId, item.product_id, item.product_name, item.quantity, item.unit_price, item.size || null, item.temperature || null, item.notes || null, now]);
   });
 
   return { id: orderId, order_number: orderNumber };
@@ -563,8 +580,8 @@ export function getActiveShift(): any {
 }
 
 export function startShift(shift: any): any {
-  const today = new Date().toISOString().split('T')[0];
-  const now = new Date().toISOString();
+  const today = getLocalDate();
+  const now = getLocalTime();
 
   // Determine shift type based on hour
   let shiftType = '晚班';
@@ -585,7 +602,7 @@ export function startShift(shift: any): any {
 }
 
 export function endShift(id: number, closingCash: number, notes?: string): any {
-  const now = new Date().toISOString();
+  const now = getLocalTime();
   run('UPDATE shifts SET end_time = ?, closing_cash = ?, status = ?, notes = ? WHERE id = ?',
     [now, closingCash, 'completed', notes || null, id]);
 
@@ -708,14 +725,14 @@ export function getComparisonData(date: string): any {
   const lastMonthTotal = lastMonthStats.total;
 
   const momChange = lastMonthTotal > 0 ? ((todayTotal - lastMonthTotal) / lastMonthTotal * 100).toFixed(1) : '0';
-  const yoyChange = yesterdayTotal > 0 ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1) : '0';
+  const dodChange = yesterdayTotal > 0 ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1) : '0';
 
   return {
     today: todayStats,
     yesterday: yesterdayStats,
     last_month: lastMonthStats,
     changes: {
-      yoy: parseFloat(yoyChange),
+      dod: parseFloat(dodChange),
       mom: parseFloat(momChange)
     }
   };
@@ -746,11 +763,12 @@ export function updateDailySummary(date: string): any {
 export function createOrderWithStaff(order: any): any {
   // Generate order number
   const orderNumber = `ORD${Date.now()}`;
+  const now = getLocalTime();
 
   // Insert order with staff_id and shift_id
-  run(`INSERT INTO orders (order_number, subtotal, discount, total, payment_method, amount_paid, change, status, notes, staff_id, shift_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [orderNumber, order.subtotal, order.discount || 0, order.total, order.payment_method, order.amount_paid || 0, order.change || 0, 'completed', order.notes || null, order.staff_id || null, order.shift_id || null]);
+  run(`INSERT INTO orders (order_number, subtotal, discount, total, payment_method, amount_paid, change, status, notes, staff_id, shift_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [orderNumber, order.subtotal, order.discount || 0, order.total, order.payment_method, order.amount_paid || 0, order.change || 0, 'completed', order.notes || null, order.staff_id || null, order.shift_id || null, now]);
 
   // Get the last inserted row id using MAX
   const maxIdResult = queryOne('SELECT MAX(id) as id FROM orders');
@@ -758,9 +776,9 @@ export function createOrderWithStaff(order: any): any {
 
   // Insert order items
   order.items.forEach((item: any) => {
-    run(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, size, temperature, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, item.product_id, item.product_name, item.quantity, item.unit_price, item.size || null, item.temperature || null, item.notes || null]);
+    run(`INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, size, temperature, notes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [orderId, item.product_id, item.product_name, item.quantity, item.unit_price, item.size || null, item.temperature || null, item.notes || null, now]);
   });
 
   // Update shift totals if shift_id is provided
